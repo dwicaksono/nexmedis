@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch, computed } from "vue";
 import Sidebar from "../components/Sidebar.vue";
 import { useUserManagement } from "../composables/useUserManagement";
 import { useAuth } from "../composables/useAuth";
-import { Bars3Icon as MenuIcon } from "@heroicons/vue/24/outline";
+import { Bars3Icon as MenuIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
 
 // Use composables
 const { user, isAuthenticated } = useAuth();
@@ -28,16 +28,52 @@ const {
 	closeModals,
 } = useUserManagement();
 const isSidebarOpen = ref(false);
+const searchQuery = ref('');
+const debouncedSearchQuery = ref('');
+let debounceTimeout: number | null = null;
 
 // Fetch users on component mount
 onMounted(() => {
 	fetchUsers();
 });
 
+// Debounce search input
+watch(searchQuery, (newValue) => {
+  if (debounceTimeout) {
+    clearTimeout(debounceTimeout);
+  }
+  
+  debounceTimeout = setTimeout(() => {
+    debouncedSearchQuery.value = newValue;
+    fetchUsers(currentPage.value);
+  }, 500) as unknown as number;
+});
+
 // Toggle sidebar
 const toggleSidebar = () => {
 	isSidebarOpen.value = !isSidebarOpen.value;
 };
+
+// Define User interface to match the store
+interface User {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  avatar: string;
+}
+
+// Filter users based on search query
+const filteredUsers = computed(() => {
+  if (!debouncedSearchQuery.value) return users.value;
+  
+  const query = debouncedSearchQuery.value.toLowerCase();
+  return users.value.filter((user: User) => 
+    user.first_name.toLowerCase().includes(query) || 
+    user.last_name.toLowerCase().includes(query) || 
+    user.email.toLowerCase().includes(query)
+  );
+});
 </script>
 
 <template>
@@ -104,6 +140,24 @@ const toggleSidebar = () => {
 					</button>
 				</div>
 
+        <!-- Search Input -->
+        <div class="mb-4 relative">
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" aria-hidden="true" />
+            </div>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search users..."
+              class="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            />
+          </div>
+          <p v-if="debouncedSearchQuery" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Showing results for: "{{ debouncedSearchQuery }}"
+          </p>
+        </div>
+
 				<div
 					v-if="loading && users.length === 0"
 					class="flex justify-center items-center h-64">
@@ -111,7 +165,7 @@ const toggleSidebar = () => {
 						class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
 				</div>
 
-				<div v-else-if="users.length === 0" class="text-center py-12">
+				<div v-else-if="filteredUsers.length === 0" class="text-center py-12">
 					<p class="text-gray-500 dark:text-gray-400">No users found.</p>
 				</div>
 
@@ -146,7 +200,7 @@ const toggleSidebar = () => {
 						</thead>
 						<tbody
 							class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-							<tr v-for="user in users" :key="user.id">
+							<tr v-for="user in filteredUsers" :key="user.id">
 								<td
 									class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
 									{{ user.id }}
@@ -272,13 +326,13 @@ const toggleSidebar = () => {
 											<button
 												type="submit"
 												:disabled="loading"
-												class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+												class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50">
 												{{ loading ? "Saving..." : "Save" }}
 											</button>
 											<button
 												type="button"
 												@click="closeModals"
-												class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm">
+												class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
 												Cancel
 											</button>
 										</div>
@@ -352,13 +406,13 @@ const toggleSidebar = () => {
 											<button
 												type="submit"
 												:disabled="loading"
-												class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+												class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50">
 												{{ loading ? "Updating..." : "Update" }}
 											</button>
 											<button
 												type="button"
 												@click="closeModals"
-												class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm">
+												class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
 												Cancel
 											</button>
 										</div>
@@ -418,13 +472,13 @@ const toggleSidebar = () => {
 							type="button"
 							@click="deleteUser"
 							:disabled="loading"
-							class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+							class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50">
 							{{ loading ? "Deleting..." : "Delete" }}
 						</button>
 						<button
 							type="button"
 							@click="closeModals"
-							class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm">
+							class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
 							Cancel
 						</button>
 					</div>
